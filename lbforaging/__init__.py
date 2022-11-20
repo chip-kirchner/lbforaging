@@ -1,9 +1,9 @@
 from gym.envs.registration import registry, register, make, spec
 from itertools import product
 
-sizes = range(5, 20)
-players = range(2, 20)
-foods = range(1, 10)
+sizes = range(5, 10)
+players = range(2, 10)
+foods = range(1, 5)
 coop = [True, False]
 partial_obs = [True, False]
 

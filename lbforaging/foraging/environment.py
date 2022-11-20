@@ -84,7 +84,7 @@ class ForagingEnv(Env):
         force_coop,
         normalize_reward=True,
         grid_observation=False,
-        penalty=0.0,
+        penalty=0.5,
     ):
         self.logger = logging.getLogger(__name__)
         self.seed()
@@ -253,8 +253,8 @@ class ForagingEnv(Env):
 
         while food_count < max_food and attempts < 1000:
             attempts += 1
-            row = self.np_random.randint(1, self.rows - 1)
-            col = self.np_random.randint(1, self.cols - 1)
+            row = self.np_random.integers(1, self.rows - 1)
+            col = self.np_random.integers(1, self.cols - 1)
 
             # check if it has neighbors:
             if (
@@ -267,7 +267,7 @@ class ForagingEnv(Env):
             self.field[row, col] = (
                 min_level
                 if min_level == max_level
-                else self.np_random.randint(min_level, max_level)
+                else self.np_random.integers(min_level, max_level)
             )
             food_count += 1
         self._food_spawned = self.field.sum()
@@ -288,12 +288,12 @@ class ForagingEnv(Env):
             player.reward = 0
 
             while attempts < 1000:
-                row = self.np_random.randint(0, self.rows)
-                col = self.np_random.randint(0, self.cols)
+                row = self.np_random.integers(0, self.rows)
+                col = self.np_random.integers(0, self.cols)
                 if self._is_empty_location(row, col):
                     player.setup(
                         (row, col),
-                        self.np_random.randint(1, max_player_level),
+                        self.np_random.integers(1, max_player_level),
                         self.field_size,
                     )
                     break
@@ -323,7 +323,7 @@ class ForagingEnv(Env):
                 and self.field[player.position[0], player.position[1] + 1] == 0
             )
         elif action == Action.LOAD:
-            return self.adjacent_food(*player.position) > 0
+            return True
 
         self.logger.error("Undefined action {} from {}".format(action, player.name))
         raise ValueError("Undefined action")
@@ -478,6 +478,7 @@ class ForagingEnv(Env):
         self._gen_valid_moves()
 
         nobs, _, _, _ = self._make_gym_obs()
+
         return nobs
 
     def step(self, actions):
@@ -499,6 +500,7 @@ class ForagingEnv(Env):
                         player.name, player.position, action
                     )
                 )
+                print("here")
                 actions[i] = Action.NONE
 
         loading_players = set()
@@ -534,33 +536,36 @@ class ForagingEnv(Env):
         while loading_players:
             # find adjacent food
             player = loading_players.pop()
-            frow, fcol = self.adjacent_food_location(*player.position)
-            food = self.field[frow, fcol]
+            if self.adjacent_food(*player.position) > 0:
+                frow, fcol = self.adjacent_food_location(*player.position)
+                food = self.field[frow, fcol]
 
-            adj_players = self.adjacent_players(frow, fcol)
-            adj_players = [
-                p for p in adj_players if p in loading_players or p is player
-            ]
+                adj_players = self.adjacent_players(frow, fcol)
+                adj_players = [
+                    p for p in adj_players if p in loading_players or p is player
+                ]
 
-            adj_player_level = sum([a.level for a in adj_players])
+                adj_player_level = sum([a.level for a in adj_players])
 
-            loading_players = loading_players - set(adj_players)
+                loading_players = loading_players - set(adj_players)
+            
+                if adj_player_level or food == 0:
+                    # failed to load
+                    for a in adj_players:
+                        a.reward -= self.penalty
+                    continue
 
-            if adj_player_level < food:
-                # failed to load
+                # else the food was loaded and each player scores points
                 for a in adj_players:
-                    a.reward -= self.penalty
-                continue
-
-            # else the food was loaded and each player scores points
-            for a in adj_players:
-                a.reward = float(a.level * food)
-                if self._normalize_reward:
-                    a.reward = a.reward / float(
-                        adj_player_level * self._food_spawned
-                    )  # normalize reward
-            # and the food is removed
-            self.field[frow, fcol] = 0
+                    a.reward = float(a.level * food)
+                    if self._normalize_reward:
+                        a.reward = a.reward / float(
+                            adj_player_level * self._food_spawned
+                        )  # normalize reward
+                # and the food is removed
+                self.field[frow, fcol] = 0
+            else:
+                player.reward -= self.penalty
 
         self._game_over = (
             self.field.sum() == 0 or self._max_episode_steps <= self.current_step
