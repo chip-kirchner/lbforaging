@@ -84,7 +84,7 @@ class ForagingEnv(Env):
         force_coop,
         normalize_reward=True,
         grid_observation=False,
-        penalty=0.5,
+        penalty=0.0,
     ):
         self.logger = logging.getLogger(__name__)
         self.seed()
@@ -177,6 +177,10 @@ class ForagingEnv(Env):
         env._gen_valid_moves()
 
         return env
+
+    @property
+    def n_agent(self):
+        return self.n_agents
 
     @property
     def field_size(self):
@@ -323,7 +327,7 @@ class ForagingEnv(Env):
                 and self.field[player.position[0], player.position[1] + 1] == 0
             )
         elif action == Action.LOAD:
-            return True
+            return self.adjacent_food(*player.position) > 0
 
         self.logger.error("Undefined action {} from {}".format(action, player.name))
         raise ValueError("Undefined action")
@@ -463,7 +467,7 @@ class ForagingEnv(Env):
             assert self.observation_space[i].contains(obs), \
                 f"obs space error: obs: {obs}, obs_space: {self.observation_space[i]}"
         
-        return nobs, nreward, ndone, ninfo
+        return nobs, nreward, any(ndone), ninfo
 
     def reset(self):
         self.field = np.zeros(self.field_size, np.int32)
@@ -549,7 +553,7 @@ class ForagingEnv(Env):
 
                 loading_players = loading_players - set(adj_players)
             
-                if adj_player_level or food == 0:
+                if adj_player_level < food:
                     # failed to load
                     for a in adj_players:
                         a.reward -= self.penalty
@@ -564,6 +568,15 @@ class ForagingEnv(Env):
                         )  # normalize reward
                 # and the food is removed
                 self.field[frow, fcol] = 0
+
+                ## Add a new food somewhere else on the map
+                """
+                player_levels = sorted([player.level for player in self.players])
+                self.spawn_food(
+                    1, max_level=sum(player_levels[:3])
+                )
+                """
+
             else:
                 player.reward -= self.penalty
 
