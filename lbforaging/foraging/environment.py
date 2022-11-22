@@ -85,6 +85,7 @@ class ForagingEnv(Env):
         normalize_reward=True,
         grid_observation=False,
         penalty=0.0,
+        step_penalty=0.0
     ):
         self.logger = logging.getLogger(__name__)
         self.seed()
@@ -93,6 +94,7 @@ class ForagingEnv(Env):
         self.field = np.zeros(field_size, np.int32)
 
         self.penalty = penalty
+        self.step_penalty = step_penalty
         
         self.max_food = max_food
         self._food_spawned = 0.0
@@ -197,6 +199,13 @@ class ForagingEnv(Env):
     @property
     def game_over(self):
         return self._game_over
+    
+    @property
+    def state_size(self):
+        return self.field.size
+    
+    def get_state(self):
+        return self.field
 
     def _gen_valid_moves(self):
         self._valid_actions = {
@@ -489,7 +498,7 @@ class ForagingEnv(Env):
         self.current_step += 1
 
         for p in self.players:
-            p.reward = 0
+            p.reward = -self.step_penalty
 
         actions = [
             Action(a) if Action(a) in self._valid_actions[p] else Action.NONE
